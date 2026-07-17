@@ -12,6 +12,7 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "DeskList",
         "width": 740,
         "height": 560,
@@ -19,6 +20,25 @@
         "minHeight": 400,
         "maximizable": false,
         "resizable": true,
+        "center": true
+      },
+      {
+        "label": "floating",
+        "title": "DeskList 悬浮窗",
+        "url": "index.html",
+        "width": 360,
+        "height": 500,
+        "minWidth": 300,
+        "minHeight": 320,
+        "maximizable": false,
+        "minimizable": false,
+        "resizable": true,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
         "center": true
       }
     ],
@@ -28,7 +48,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

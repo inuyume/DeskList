@@ -6,7 +6,14 @@ describe("data validation", () => {
     const data = createDefaultData();
     expect(data.lists).toHaveLength(1);
     expect(data.lists[0].name).toBe("今天");
+    expect(data.settings.floatingWindowEnabled).toBe(false);
     expect(normalizeAppData(data)).not.toBeNull();
+  });
+
+  it("preserves the floating window preference during normalization", () => {
+    const data = createDefaultData();
+    data.settings.floatingWindowEnabled = true;
+    expect(normalizeAppData(data)?.settings.floatingWindowEnabled).toBe(true);
   });
 
   it("rejects unusable roots and unknown future versions", () => {

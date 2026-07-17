@@ -4,6 +4,7 @@ export const DATA_VERSION = 1;
 
 const defaultSettings = (): AppSettings => ({
   alwaysOnTop: false,
+  floatingWindowEnabled: false,
   launchAtStartup: false,
   startHidden: false,
   showCompleted: true,

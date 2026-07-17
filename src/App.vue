@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, shallowRef } from "vue";
 import { getVersion } from "@tauri-apps/api/app";
-import { listen } from "@tauri-apps/api/event";
+import { emit as emitEvent, listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import AppHeader from "./components/AppHeader.vue";
 import ConfirmDialog from "./components/ConfirmDialog.vue";
+import FloatingWindow from "./components/FloatingWindow.vue";
 import ListSidebar from "./components/ListSidebar.vue";
 import QuickAdd from "./components/QuickAdd.vue";
 import SettingsView from "./components/SettingsView.vue";
@@ -16,11 +18,17 @@ import { getAutostartEnabled, setAutostartEnabled } from "./services/autostartSe
 import { exportData, pickImportData } from "./services/importExportService";
 import { loadData, saveBackup, saveData } from "./services/storageService";
 import { registerWindowShortcut } from "./services/shortcutService";
-import type { AppSettings, SaveMode } from "./types/todo";
+import type { AppData, AppSettings, SaveMode } from "./types/todo";
 import { debounce } from "./utils/debounce";
 import { createDefaultData } from "./utils/validation";
 
 const todo = shallowRef<TodoStore>();
+const isTauriRuntime = "__TAURI_INTERNALS__" in window;
+const previewFloating = import.meta.env.DEV && new URLSearchParams(window.location.search).has("floating");
+const currentWindow = isTauriRuntime ? getCurrentWindow() : null;
+const windowLabel = currentWindow?.label ?? (previewFloating ? "floating-preview" : "browser-preview");
+const isFloatingWindow = currentWindow?.label === "floating" || previewFloating;
+document.documentElement.classList.toggle("floating-root", isFloatingWindow);
 const ready = ref(false);
 const settingsOpen = ref(false);
 const version = ref("0.1.0");
@@ -28,15 +36,20 @@ const shortcutStatus = ref("正在检查快捷键…");
 const quickAdd = ref<InstanceType<typeof QuickAdd>>();
 const confirm = ref<{ type: "delete-list" | "clear" | "import" | "reset"; id?: string; data?: unknown }>();
 const { messages, show } = useToast();
-const { setAlwaysOnTop, hideWindow } = useWindowControls();
+const { setAlwaysOnTop, hideWindow, setFloatingWindowVisible, showMainWindow } = useWindowControls();
 
 const activeTitle = computed(() => todo.value?.activeList.value?.name ?? "DeskList");
 const completedCount = computed(() => todo.value?.activeList.value?.tasks.filter((task) => task.completed).length ?? 0);
+const pendingCount = computed(() => todo.value?.activeList.value?.tasks.filter((task) => !task.completed).length ?? 0);
+interface SyncPayload { source: string; data: AppData }
 let saveRunning = Promise.resolve();
 function persist() {
   if (!todo.value) return;
   const snapshot = todo.value.snapshot();
-  saveRunning = saveRunning.then(() => saveData(snapshot)).catch((error: unknown) => {
+  saveRunning = saveRunning.then(async () => {
+    await saveData(snapshot);
+    await emitEvent("app-data-changed", { source: windowLabel, data: snapshot } satisfies SyncPayload);
+  }).catch((error: unknown) => {
     console.error("保存 DeskList 数据失败", error); show("保存失败，请稍后重试", "error");
   });
 }
@@ -55,7 +68,17 @@ onMounted(async () => {
   }
   ready.value = true;
   try {
+    await listen<SyncPayload>("app-data-changed", ({ payload }) => {
+      if (payload.source !== windowLabel) todo.value?.replaceData(payload.data, false);
+    });
+  } catch (error) { console.error("注册跨窗口数据同步失败", error); }
+  if (isFloatingWindow) {
+    if (currentWindow && !todo.value.state.settings.floatingWindowEnabled) await hideWindow();
+    return;
+  }
+  try {
     await setAlwaysOnTop(todo.value.state.settings.alwaysOnTop);
+    await setFloatingWindowVisible(todo.value.state.settings.floatingWindowEnabled);
     if (todo.value.state.settings.startHidden) await hideWindow();
   } catch (error) { console.error("应用窗口设置失败", error); }
   try { version.value = await getVersion(); } catch (error) { console.error("读取版本失败", error); }
@@ -67,6 +90,7 @@ onMounted(async () => {
     await listen("focus-quick-add", () => { settingsOpen.value = false; nextTick(() => quickAdd.value?.focus()); });
     await listen("tray-toggle-always-on-top", () => { void toggleTop(); });
     await listen("tray-toggle-autostart", () => { if (todo.value) void updateSetting("launchAtStartup", !todo.value.state.settings.launchAtStartup); });
+    await listen("tray-toggle-floating", () => { if (todo.value) void toggleFloating(); });
     await registerWindowShortcut(() => { settingsOpen.value = false; nextTick(() => quickAdd.value?.focus()); });
     shortcutStatus.value = "已启用：Ctrl + Alt + Space";
   } catch (error) { console.error("监听桌面事件失败", error); shortcutStatus.value = "注册失败，快捷键可能已被占用"; }
@@ -77,10 +101,12 @@ function requestRename(id: string, current: string) {
   if (name !== null && !todo.value?.renameList(id, name)) show("清单名称不能为空", "error");
 }
 async function toggleTop() { if (todo.value) await updateSetting("alwaysOnTop", !todo.value.state.settings.alwaysOnTop); }
+async function toggleFloating() { if (todo.value) await updateSetting("floatingWindowEnabled", !todo.value.state.settings.floatingWindowEnabled); }
 async function updateSetting(key: keyof AppSettings, value: boolean) {
   if (!todo.value) return;
   try {
     if (key === "alwaysOnTop") await setAlwaysOnTop(value);
+    if (key === "floatingWindowEnabled") await setFloatingWindowVisible(value);
     if (key === "launchAtStartup") await setAutostartEnabled(value);
     todo.value.updateSetting(key, value);
   } catch (error) { console.error(`更新设置 ${key} 失败`, error); show("设置未能生效", "error"); }
@@ -109,11 +135,12 @@ async function runConfirm() {
 </script>
 
 <template>
-  <div v-if="!ready || !todo" class="loading">正在整理你的清单…</div>
+  <FloatingWindow v-if="ready && todo && isFloatingWindow" :lists="todo.state.lists" :active-id="todo.state.activeListId" :tasks="todo.visibleTasks.value" :pending-count="pendingCount" @select="todo.setActiveList" @add="todo.addTask" @toggle="todo.toggleTask" @edit="todo.editTask" @delete="todo.deleteTask" @hide="updateSetting('floatingWindowEnabled', false)" @open-main="showMainWindow" />
+  <div v-else-if="!ready || !todo" class="loading">正在整理你的清单…</div>
   <div v-else class="app-shell">
     <ListSidebar v-if="!settingsOpen" :lists="todo.state.lists" :active-id="todo.state.activeListId" @select="todo.setActiveList" @add="todo.addList" @rename="requestRename" @delete="id => confirm = { type: 'delete-list', id }" @move="todo.moveList" />
     <main class="main-panel" :class="{ wide: settingsOpen }">
-      <AppHeader :title="activeTitle" :settings-open="settingsOpen" :always-on-top="todo.state.settings.alwaysOnTop" @settings="settingsOpen = !settingsOpen" @toggle-top="toggleTop" />
+      <AppHeader :title="activeTitle" :settings-open="settingsOpen" :always-on-top="todo.state.settings.alwaysOnTop" :floating-open="todo.state.settings.floatingWindowEnabled" @settings="settingsOpen = !settingsOpen" @toggle-top="toggleTop" @toggle-floating="toggleFloating" />
       <SettingsView v-if="settingsOpen" :settings="todo.state.settings" :shortcut-status="shortcutStatus" :version="version" @back="settingsOpen = false" @update="updateSetting" @export="doExport" @import="beginImport" @reset="confirm = { type: 'reset' }" />
       <template v-else>
         <div class="task-toolbar"><span>{{ todo.activeList.value?.tasks.filter(task => !task.completed).length ?? 0 }} 项待办</span><button v-if="completedCount" class="text-button" @click="confirm = { type: 'clear' }">清除已完成</button></div>

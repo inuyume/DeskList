@@ -26,6 +26,7 @@ export interface TodoTask {
 
 export interface AppSettings {
   alwaysOnTop: boolean;
+  floatingWindowEnabled: boolean;
   launchAtStartup: boolean;
   startHidden: boolean;
   showCompleted: boolean;

@@ -1,4 +1,4 @@
-import { computed, reactive, readonly } from "vue";
+import { computed, reactive, readonly, toRaw } from "vue";
 import type { AppData, AppSettings, SaveMode, TodoList } from "../types/todo";
 import { sortTasks } from "../utils/sorting";
 import { createDefaultData, normalizeAppData } from "../utils/validation";
@@ -127,15 +127,15 @@ export function createTodoStore(initial: AppData, onChange: SaveHandler = () => 
     state.settings[key] = value;
     onChange("immediate");
   }
-  function replaceData(value: unknown) {
+  function replaceData(value: unknown, persist = true) {
     const data = normalizeAppData(value);
     if (!data) return false;
     Object.assign(state, structuredClone(data));
-    onChange("immediate");
+    if (persist) onChange("immediate");
     return true;
   }
   function reset() { replaceData(createDefaultData()); }
-  function snapshot(): AppData { return structuredClone(state); }
+  function snapshot(): AppData { return structuredClone(toRaw(state)); }
 
   return { state: readonly(state), activeList, visibleTasks, snapshot, setActiveList, addList, renameList, deleteList, moveList, addTask, editTask, toggleTask, deleteTask, moveTask, clearCompleted, updateSetting, replaceData, reset };
 }

@@ -36,11 +36,12 @@ pub fn run() {
         .setup(|app| {
             let show = MenuItem::with_id(app, "show", "显示 DeskList", true, None::<&str>)?;
             let quick_add = MenuItem::with_id(app, "quick-add", "快速添加", true, None::<&str>)?;
+            let floating = MenuItem::with_id(app, "floating", "桌面悬浮窗", true, None::<&str>)?;
             let always_on_top = MenuItem::with_id(app, "always-on-top", "始终置顶", true, None::<&str>)?;
             let autostart = MenuItem::with_id(app, "autostart", "开机启动", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quick_add, &always_on_top, &autostart, &separator, &quit])?;
+            let menu = Menu::with_items(app, &[&show, &quick_add, &floating, &always_on_top, &autostart, &separator, &quit])?;
 
             TrayIconBuilder::with_id("desklist-tray")
                 .icon(app.default_window_icon().expect("application icon missing").clone())
@@ -50,6 +51,7 @@ pub fn run() {
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main_window(app, false),
                     "quick-add" => show_main_window(app, true),
+                    "floating" => { let _ = app.emit("tray-toggle-floating", ()); }
                     "always-on-top" => { let _ = app.emit("tray-toggle-always-on-top", ()); }
                     "autostart" => { let _ = app.emit("tray-toggle-autostart", ()); }
                     "quit" => { QUITTING.store(true, Ordering::SeqCst); app.exit(0); }

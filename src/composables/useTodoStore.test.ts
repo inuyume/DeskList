@@ -36,4 +36,21 @@ describe("todo store", () => {
     store.toggleTask(store.activeList.value.tasks[0].id);
     expect(store.visibleTasks.value.map((task) => task.title)).toEqual(["第二项", "第三项", "第一项"]);
   });
+
+  it("accepts cross-window snapshots without triggering another save", () => {
+    const save = vi.fn();
+    const store = createTodoStore(createDefaultData(), save);
+    const incoming = createDefaultData();
+    incoming.lists[0].name = "来自悬浮窗";
+    expect(store.replaceData(incoming, false)).toBe(true);
+    expect(store.activeList.value.name).toBe("来自悬浮窗");
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("creates a serializable snapshot from Vue reactive state", () => {
+    const store = createTodoStore(createDefaultData());
+    store.addTask("可保存任务");
+    expect(() => store.snapshot()).not.toThrow();
+    expect(store.snapshot().lists[0].tasks[0].title).toBe("可保存任务");
+  });
 });
