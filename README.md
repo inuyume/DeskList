@@ -1,8 +1,12 @@
 # DeskList
 
+<p align="center">
+  <img src="assets/branding/desklist-logo.png" width="180" alt="DeskList Logo">
+</p>
+
 DeskList 是一个面向 Windows 10/11 的轻量离线待办应用。它提供完整主窗口和透明桌面悬浮窗，支持多清单、快速任务录入、本地持久化、系统托盘、全局快捷键、开机启动和 JSON 备份，不需要账户、服务器或网络请求。
 
-> 截图：项目完成 Windows 手工验收后，将主界面截图放到 `docs/screenshots/main.png` 并在此处引用。
+![DeskList 主界面](docs/screenshots/main.png)
 
 ## 功能
 

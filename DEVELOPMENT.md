@@ -666,6 +666,13 @@ desklist.backup.json
 - 文字清晰
 - 复选框点击区域足够大
 
+品牌标识：
+
+- 主 Logo：`assets/branding/desklist-logo.png`，透明 PNG。
+- 视觉语义：深蓝 `D` 形外轮廓、亮蓝悬浮清单卡片与白色完成勾选。
+- Tauri 多尺寸图标输出到 `src-tauri/icons/desklist/`，通过 `bun run tauri icon assets/branding/desklist-logo.png --output src-tauri/icons/desklist` 重新生成。
+- `tauri.conf.json` 只引用该目录内的应用图标，旧图标目录保留用于历史对比。
+
 建议设计变量：
 
 ```css
