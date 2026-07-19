@@ -44,4 +44,17 @@ describe("storage recovery", () => {
     expect(corruptPaths.has("desklist.json")).toBe(false);
     expect(files.get("desklist.json")?.get("appData")).toMatchObject({ activeListId: backup.activeListId });
   });
+
+  it("recreates corrupt stores when saving", async () => {
+    corruptPaths.add("desklist.json");
+    corruptPaths.add("desklist.backup.json");
+    vi.resetModules();
+    const { saveData } = await import("./storageService");
+    const data = createDefaultData();
+
+    await expect(saveData(data)).resolves.toBeUndefined();
+
+    expect(corruptPaths.size).toBe(0);
+    expect(files.get("desklist.json")?.get("appData")).toMatchObject({ activeListId: data.activeListId });
+  });
 });

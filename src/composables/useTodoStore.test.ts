@@ -37,6 +37,32 @@ describe("todo store", () => {
     expect(store.visibleTasks.value.map((task) => task.title)).toEqual(["第二项", "第三项", "第一项"]);
   });
 
+  it("moves between adjacent visible tasks when completed tasks are hidden", () => {
+    const store = createTodoStore(createDefaultData());
+    store.addTask("第一项"); store.addTask("隐藏项"); store.addTask("第三项");
+    const [first, hidden] = store.activeList.value.tasks;
+    store.toggleTask(hidden.id);
+    store.updateSetting("showCompleted", false);
+
+    store.moveTask(first.id, 1);
+
+    expect(store.visibleTasks.value.map((task) => task.title)).toEqual(["第三项", "第一项"]);
+  });
+
+  it("does not move tasks across the fixed completed-task boundary", () => {
+    const save = vi.fn();
+    const store = createTodoStore(createDefaultData(), save);
+    store.addTask("已完成"); store.addTask("待办");
+    const completed = store.activeList.value.tasks[0];
+    store.toggleTask(completed.id);
+    save.mockClear();
+
+    store.moveTask(completed.id, -1);
+
+    expect(store.visibleTasks.value.map((task) => task.title)).toEqual(["待办", "已完成"]);
+    expect(save).not.toHaveBeenCalled();
+  });
+
   it("accepts cross-window snapshots without triggering another save", () => {
     const save = vi.fn();
     const store = createTodoStore(createDefaultData(), save);

@@ -102,11 +102,15 @@ export function createTodoStore(initial: AppData, onChange: SaveHandler = () => 
   function moveTask(id: string, direction: -1 | 1) {
     const list = activeList.value;
     if (!list) return;
-    const ordered = [...list.tasks].sort((a, b) => a.sortOrder - b.sortOrder);
-    const index = ordered.findIndex((task) => task.id === id);
+    const visible = visibleTasks.value;
+    const index = visible.findIndex((task) => task.id === id);
     const target = index + direction;
-    if (index < 0 || target < 0 || target >= ordered.length) return;
-    [ordered[index], ordered[target]] = [ordered[target], ordered[index]];
+    if (index < 0 || target < 0 || target >= visible.length) return;
+    const currentTask = visible[index];
+    const targetTask = visible[target];
+    if (state.settings.moveCompletedToBottom && currentTask.completed !== targetTask.completed) return;
+    [currentTask.sortOrder, targetTask.sortOrder] = [targetTask.sortOrder, currentTask.sortOrder];
+    const ordered = [...list.tasks].sort((a, b) => a.sortOrder - b.sortOrder);
     renumber(ordered);
     list.tasks.splice(0, list.tasks.length, ...ordered);
     touchList(list);
