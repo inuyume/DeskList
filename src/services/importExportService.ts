@@ -6,7 +6,13 @@ import { normalizeAppData } from "../utils/validation";
 export async function pickImportData(): Promise<AppData | null> {
   const path = await open({ multiple: false, directory: false, filters: [{ name: "JSON", extensions: ["json"] }] });
   if (!path) return null;
-  const parsed: unknown = JSON.parse(await readTextFile(path));
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readTextFile(path));
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error("文件格式错误，无法解析 JSON 内容");
+    throw error;
+  }
   const data = normalizeAppData(parsed);
   if (!data) throw new Error("文件不是有效的 DeskList 备份");
   return data;

@@ -37,28 +37,63 @@ pub fn run() {
             let show = MenuItem::with_id(app, "show", "显示 DeskList", true, None::<&str>)?;
             let quick_add = MenuItem::with_id(app, "quick-add", "快速添加", true, None::<&str>)?;
             let floating = MenuItem::with_id(app, "floating", "桌面悬浮窗", true, None::<&str>)?;
-            let always_on_top = MenuItem::with_id(app, "always-on-top", "始终置顶", true, None::<&str>)?;
+            let always_on_top =
+                MenuItem::with_id(app, "always-on-top", "始终置顶", true, None::<&str>)?;
             let autostart = MenuItem::with_id(app, "autostart", "开机启动", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quick_add, &floating, &always_on_top, &autostart, &separator, &quit])?;
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &show,
+                    &quick_add,
+                    &floating,
+                    &always_on_top,
+                    &autostart,
+                    &separator,
+                    &quit,
+                ],
+            )?;
 
             TrayIconBuilder::with_id("desklist-tray")
-                .icon(app.default_window_icon().expect("application icon missing").clone())
+                .icon(
+                    app.default_window_icon()
+                        .expect("application icon missing")
+                        .clone(),
+                )
                 .tooltip("DeskList")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => show_main_window(app, false),
                     "quick-add" => show_main_window(app, true),
-                    "floating" => { let _ = app.emit("tray-toggle-floating", ()); }
-                    "always-on-top" => { let _ = app.emit("tray-toggle-always-on-top", ()); }
-                    "autostart" => { let _ = app.emit("tray-toggle-autostart", ()); }
-                    "quit" => { QUITTING.store(true, Ordering::SeqCst); app.exit(0); }
+                    "floating" => {
+                        let _ = app.emit("tray-toggle-floating", ());
+                    }
+                    "always-on-top" => {
+                        let _ = app.emit("tray-toggle-always-on-top", ());
+                    }
+                    "autostart" => {
+                        let _ = app.emit("tray-toggle-autostart", ());
+                    }
+                    "quit" => {
+                        QUITTING.store(true, Ordering::SeqCst);
+                        app.exit(0);
+                    }
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if matches!(event, TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } | TrayIconEvent::DoubleClick { button: MouseButton::Left, .. }) {
+                    if matches!(
+                        event,
+                        TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } | TrayIconEvent::DoubleClick {
+                            button: MouseButton::Left,
+                            ..
+                        }
+                    ) {
                         show_main_window(tray.app_handle(), false);
                     }
                 })
@@ -70,6 +105,9 @@ pub fn run() {
                 if !QUITTING.load(Ordering::SeqCst) {
                     api.prevent_close();
                     let _ = window.hide();
+                    if window.label() == "floating" {
+                        let _ = window.app_handle().emit("floating-window-closed", ());
+                    }
                 }
             }
         })

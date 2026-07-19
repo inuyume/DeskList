@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, shallowRef } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef } from "vue";
 import { getVersion } from "@tauri-apps/api/app";
 import { emit as emitEvent, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -42,6 +42,23 @@ const activeTitle = computed(() => todo.value?.activeList.value?.name ?? "DeskLi
 const completedCount = computed(() => todo.value?.activeList.value?.tasks.filter((task) => task.completed).length ?? 0);
 const pendingCount = computed(() => todo.value?.activeList.value?.tasks.filter((task) => !task.completed).length ?? 0);
 interface SyncPayload { source: string; data: AppData }
+type Cleanup = () => void | Promise<void>;
+const cleanups: Cleanup[] = [];
+let disposed = false;
+
+function runCleanup(cleanup: Cleanup) {
+  try {
+    void Promise.resolve(cleanup()).catch((error: unknown) => console.error("释放桌面监听资源失败", error));
+  } catch (error) {
+    console.error("释放桌面监听资源失败", error);
+  }
+}
+
+function trackCleanup(cleanup: Cleanup) {
+  if (disposed) runCleanup(cleanup);
+  else cleanups.push(cleanup);
+}
+
 let saveRunning = Promise.resolve();
 function persist() {
   if (!todo.value) return;
@@ -68,9 +85,9 @@ onMounted(async () => {
   }
   ready.value = true;
   try {
-    await listen<SyncPayload>("app-data-changed", ({ payload }) => {
+    trackCleanup(await listen<SyncPayload>("app-data-changed", ({ payload }) => {
       if (payload.source !== windowLabel) todo.value?.replaceData(payload.data, false);
-    });
+    }));
   } catch (error) { console.error("注册跨窗口数据同步失败", error); }
   if (isFloatingWindow) {
     if (currentWindow && !todo.value.state.settings.floatingWindowEnabled) await hideWindow();
@@ -87,13 +104,21 @@ onMounted(async () => {
     if (todo.value && todo.value.state.settings.launchAtStartup !== enabled) todo.value.updateSetting("launchAtStartup", enabled);
   } catch (error) { console.error("读取开机启动状态失败", error); show("无法读取开机启动状态", "error"); }
   try {
-    await listen("focus-quick-add", () => { settingsOpen.value = false; nextTick(() => quickAdd.value?.focus()); });
-    await listen("tray-toggle-always-on-top", () => { void toggleTop(); });
-    await listen("tray-toggle-autostart", () => { if (todo.value) void updateSetting("launchAtStartup", !todo.value.state.settings.launchAtStartup); });
-    await listen("tray-toggle-floating", () => { if (todo.value) void toggleFloating(); });
-    await registerWindowShortcut(() => { settingsOpen.value = false; nextTick(() => quickAdd.value?.focus()); });
+    trackCleanup(await listen("focus-quick-add", () => { settingsOpen.value = false; nextTick(() => quickAdd.value?.focus()); }));
+    trackCleanup(await listen("tray-toggle-always-on-top", () => { void toggleTop(); }));
+    trackCleanup(await listen("tray-toggle-autostart", () => { if (todo.value) void updateSetting("launchAtStartup", !todo.value.state.settings.launchAtStartup); }));
+    trackCleanup(await listen("tray-toggle-floating", () => { if (todo.value) void toggleFloating(); }));
+    trackCleanup(await listen("floating-window-closed", () => {
+      if (todo.value?.state.settings.floatingWindowEnabled) todo.value.updateSetting("floatingWindowEnabled", false);
+    }));
+    trackCleanup(await registerWindowShortcut(() => { settingsOpen.value = false; nextTick(() => quickAdd.value?.focus()); }));
     shortcutStatus.value = "已启用：Ctrl + Alt + Space";
   } catch (error) { console.error("监听桌面事件失败", error); shortcutStatus.value = "注册失败，快捷键可能已被占用"; }
+});
+
+onUnmounted(() => {
+  disposed = true;
+  cleanups.splice(0).forEach(runCleanup);
 });
 
 function requestRename(id: string, current: string) {
@@ -144,7 +169,7 @@ async function runConfirm() {
       <SettingsView v-if="settingsOpen" :settings="todo.state.settings" :shortcut-status="shortcutStatus" :version="version" @back="settingsOpen = false" @update="updateSetting" @export="doExport" @import="beginImport" @reset="confirm = { type: 'reset' }" />
       <template v-else>
         <div class="task-toolbar"><span>{{ todo.activeList.value?.tasks.filter(task => !task.completed).length ?? 0 }} 项待办</span><button v-if="completedCount" class="text-button" @click="confirm = { type: 'clear' }">清除已完成</button></div>
-        <TaskList :tasks="todo.visibleTasks.value" @toggle="todo.toggleTask" @edit="todo.editTask" @delete="todo.deleteTask" @move="todo.moveTask" />
+        <TaskList :tasks="todo.visibleTasks.value" :group-completed="todo.state.settings.moveCompletedToBottom" @toggle="todo.toggleTask" @edit="todo.editTask" @delete="todo.deleteTask" @move="todo.moveTask" />
         <QuickAdd ref="quickAdd" @add="todo.addTask" />
       </template>
     </main>

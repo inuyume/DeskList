@@ -10,9 +10,18 @@ async function openStore(path: string, createNew = false) {
   return load(path, { autoSave: false, defaults: {}, createNew });
 }
 
+async function openOrRecreateStore(path: string): Promise<Store> {
+  try {
+    return await openStore(path);
+  } catch (error) {
+    console.error(`存储文件 ${path} 无法打开，将重新创建`, error);
+    return openStore(path, true);
+  }
+}
+
 async function stores() {
-  mainStore ??= await openStore("desklist.json");
-  backupStore ??= await openStore("desklist.backup.json");
+  mainStore ??= await openOrRecreateStore("desklist.json");
+  backupStore ??= await openOrRecreateStore("desklist.backup.json");
   return { main: mainStore, backup: backupStore };
 }
 

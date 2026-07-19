@@ -1,9 +1,9 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { register } from "@tauri-apps/plugin-global-shortcut";
+import { register, unregister } from "@tauri-apps/plugin-global-shortcut";
 
 export const DEFAULT_SHORTCUT = "Control+Alt+Space";
 
-export async function registerWindowShortcut(onShown: () => void): Promise<void> {
+export async function registerWindowShortcut(onShown: () => void): Promise<() => Promise<void>> {
   const appWindow = getCurrentWindow();
   await register(DEFAULT_SHORTCUT, async (event) => {
     if (event.state !== "Pressed") return;
@@ -16,4 +16,5 @@ export async function registerWindowShortcut(onShown: () => void): Promise<void>
     await appWindow.setFocus();
     onShown();
   });
+  return () => unregister(DEFAULT_SHORTCUT);
 }
